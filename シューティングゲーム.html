@@ -1,174 +1,178 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2 Player Battle Game</title>
+    <title>二人対戦ゲーム</title>
     <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden; /* スクロールバーを非表示 */
-        }
         canvas {
+            background: white;
             display: block;
-            background-color: white; /* 背景を白に設定 */
+            margin: auto;
+            border: 1px solid black;
         }
     </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
 <script>
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
 
-// キャンバスを画面全体に設定
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+    // プレイヤーの設定
+    const players = [
+        { 
+            x: 100, 
+            y: 300, 
+            width: 40, 
+            height: 40, 
+            color: "blue", 
+            speed: 5, 
+            bullets: [], 
+            health: 100, 
+            keys: { up: "w", down: "s", left: "a", right: "d", shoot: "e" }, 
+            direction: "right", 
+            bulletSpeed: 7,   // プレイヤー1の弾の速度
+            shootInterval: 500,  // プレイヤー1の発射間隔（ミリ秒）
+            lastShot: 0 
+        },
+        { 
+            x: 700, 
+            y: 300, 
+            width: 40, 
+            height: 40, 
+            color: "red", 
+            speed: 5, 
+            bullets: [], 
+            health: 100, 
+            keys: { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight", shoot: "l" }, 
+            direction: "left", 
+            bulletSpeed: 7,   // プレイヤー2の弾の速度
+            shootInterval: 500,  // プレイヤー2の発射間隔（ミリ秒）
+            lastShot: 0 
+        }
+    ];
 
-// Player properties
-const player1 = {
-    x: 100, y: canvas.height / 2, width: 30, height: 30, color: 'blue',
-    dx: 0, dy: 0, bullets: [],
-    bulletSpeed: 5,  // Bullet speed
-    shootInterval: 500,  // Shooting interval in milliseconds
-    health: 3,  // Player health
-    lastShootTime: 0
-};
+    const bulletSize = 10;
+    const bulletDamage = 10;
+    const keys = {};
+    let winner = null; // 勝者を記録
 
-const player2 = {
-    x: canvas.width - 130, y: canvas.height / 2, width: 30, height: 30, color: 'red',
-    dx: 0, dy: 0, bullets: [],
-    bulletSpeed: 5,
-    shootInterval: 500,
-    health: 3,
-    lastShootTime: 0
-};
+    // キーイベントのリスナー
+    document.addEventListener("keydown", (e) => { keys[e.key] = true; });
+    document.addEventListener("keyup", (e) => { keys[e.key] = false; });
 
-const players = [player1, player2];
+    // プレイヤーを描画
+    function drawPlayers() {
+        players.forEach(player => {
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+        });
+    }
 
-// Handle input
-const keys = {};
+    // 弾を描画
+    function drawBullets() {
+        players.forEach(player => {
+            ctx.fillStyle = player.color;
+            player.bullets.forEach((bullet, index) => {
+                // 弾を移動
+                bullet.x += bullet.dx * player.bulletSpeed; // 各プレイヤーごとの弾の速度
+                bullet.y += bullet.dy * player.bulletSpeed;
 
-window.addEventListener('keydown', (e) => {
-    keys[e.key] = true;
-    if (e.key === 'E') shootBullet(player1);
-    if (e.key === 'L') shootBullet(player2);
-});
+                // 弾が画面外に出たら削除
+                if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+                    player.bullets.splice(index, 1);
+                }
 
-window.addEventListener('keyup', (e) => {
-    keys[e.key] = false;
-});
+                // 弾の描画
+                ctx.fillRect(bullet.x, bullet.y, bulletSize, bulletSize);
 
-// Shoot bullets
-function shootBullet(player) {
-    const currentTime = Date.now();
-    if (currentTime - player.lastShootTime < player.shootInterval) return;
+                // 他のプレイヤーへの衝突判定
+                players.forEach(target => {
+                    if (target !== player &&
+                        bullet.x < target.x + target.width &&
+                        bullet.x + bulletSize > target.x &&
+                        bullet.y < target.y + target.height &&
+                        bullet.y + bulletSize > target.y) {
+                        
+                        // 弾のダメージ処理
+                        target.health -= bulletDamage;
+                        player.bullets.splice(index, 1);
 
-    const bullet = {
-        x: player.x + (player.width / 2),
-        y: player.y + (player.height / 2),
-        dx: player === player1 ? 1 : -1,  // Bullet direction
-        width: 10,
-        height: 5,
-        color: 'black'
-    };
+                        // 勝敗判定
+                        if (target.health <= 0 && winner === null) {
+                            winner = player.color; // 勝者を設定
+                        }
+                    }
+                });
+            });
+        });
+    }
 
-    player.bullets.push(bullet);
-    player.lastShootTime = currentTime;
-}
+    // プレイヤーの動き
+    function movePlayers() {
+        players.forEach(player => {
+            if (keys[player.keys.up] && player.y > 0) player.y -= player.speed;
+            if (keys[player.keys.down] && player.y < canvas.height - player.height) player.y += player.speed;
+            if (keys[player.keys.left] && player.x > 0) player.x -= player.speed;
+            if (keys[player.keys.right] && player.x < canvas.width - player.width) player.x += player.speed;
 
-// Update game state
-function update() {
-    // Player 1 movement
-    player1.dx = player1.dy = 0;
-    if (keys['w']) player1.dy = -2;
-    if (keys['s']) player1.dy = 2;
-    if (keys['a']) player1.dx = -2;
-    if (keys['d']) player1.dx = 2;
+            // プレイヤーの向き変更
+            if (keys[player.keys.left]) {
+                player.direction = "left";  // 左に動くとき
+            } else if (keys[player.keys.right]) {
+                player.direction = "right"; // 右に動くとき
+            }
 
-    // Player 2 movement
-    player2.dx = player2.dy = 0;
-    if (keys['ArrowUp']) player2.dy = -2;
-    if (keys['ArrowDown']) player2.dy = 2;
-    if (keys['ArrowLeft']) player2.dx = -2;
-    if (keys['ArrowRight']) player2.dx = 2;
-
-    // Move players
-    players.forEach(player => {
-        player.x += player.dx;
-        player.y += player.dy;
-
-        // Prevent players from leaving the canvas
-        player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
-        player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
-
-        // Update bullets
-        player.bullets.forEach((bullet, index) => {
-            bullet.x += bullet.dx * player.bulletSpeed;
-
-            // Check for bullet collision with the other player
-            const otherPlayer = player === player1 ? player2 : player1;
-            if (
-                bullet.x < otherPlayer.x + otherPlayer.width &&
-                bullet.x + bullet.width > otherPlayer.x &&
-                bullet.y < otherPlayer.y + otherPlayer.height &&
-                bullet.y + bullet.height > otherPlayer.y
-            ) {
-                otherPlayer.health -= 1;  // Decrease health
-                player.bullets.splice(index, 1); // Remove bullet
-                if (otherPlayer.health <= 0) {
-                    alert(`${player === player1 ? 'Player 1' : 'Player 2'} wins!`);
-                    resetGame();
+            // 弾の発射
+            if (keys[player.keys.shoot]) {
+                const currentTime = Date.now();
+                if (currentTime - player.lastShot > player.shootInterval) { // プレイヤーごとの発射間隔
+                    // 発射方向が左なら、左方向に、右なら右方向に発射
+                    const dx = player.direction === "left" ? -1 : 1; 
+                    const dy = 0;  // 縦方向は動かさない
+                    player.bullets.push({
+                        x: player.x + player.width / 2 - bulletSize / 2, // プレイヤーの中央から発射
+                        y: player.y + player.height / 2 - bulletSize / 2, // プレイヤーの中央から発射
+                        dx: dx,
+                        dy: dy
+                    });
+                    player.lastShot = currentTime;
                 }
             }
-
-            // Remove bullets that leave the canvas
-            if (bullet.x < 0 || bullet.x > canvas.width) {
-                player.bullets.splice(index, 1);
-            }
         });
-    });
-}
+    }
 
-// Reset the game
-function resetGame() {
-    player1.x = 100; player1.y = canvas.height / 2; player1.bullets = []; player1.health = 3;
-    player2.x = canvas.width - 130; player2.y = canvas.height / 2; player2.bullets = []; player2.health = 3;
-}
+    // スコアと体力の描画
+    function drawHUD() {
+        ctx.fillStyle = "black";
+        ctx.font = "20px Arial";
+        ctx.fillText(`Player 1 Health: ${players[0].health}`, 20, 30);
+        ctx.fillText(`Player 2 Health: ${players[1].health}`, canvas.width - 200, 30);
 
-// Render game
-function render() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (winner) {
+            // 勝者が決まったとき、背景に勝者を表示
+            ctx.fillStyle = "green";
+            ctx.font = "30px Arial";
+            ctx.fillText(`${winner}の勝利！`, canvas.width / 2 - 100, canvas.height / 2);
+        }
+    }
 
-    // Draw players
-    players.forEach(player => {
-        ctx.fillStyle = player.color;
-        ctx.fillRect(player.x, player.y, player.width, player.height);
+    // ゲーム進行
+    function gameLoop() {
+        if (winner) {
+            return; // 勝者が決まったらゲームを停止
+        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        movePlayers();
+        drawPlayers();
+        drawBullets();
+        drawHUD();
+        requestAnimationFrame(gameLoop);
+    }
 
-        // Draw bullets
-        player.bullets.forEach(bullet => {
-            ctx.fillStyle = bullet.color;
-            ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
-        });
-
-        // Draw health
-        ctx.fillStyle = 'black';
-        ctx.font = '20px Arial';
-        const healthText = `Health: ${player.health}`;
-        const xPos = player === player1 ? 10 : canvas.width - 150;
-        ctx.fillText(healthText, xPos, 30);
-    });
-}
-
-// Game loop
-function gameLoop() {
-    update();
-    render();
-    requestAnimationFrame(gameLoop);
-}
-
-gameLoop();
+    gameLoop();
 </script>
 </body>
 </html>
